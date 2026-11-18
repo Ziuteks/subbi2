@@ -22,8 +22,9 @@ final class SubscriptionStore {
             refreshReminders()
         }
     }
-    var reminderDays: Int {
-        didSet { UserDefaults.standard.set(reminderDays, forKey: "reminderDays"); refreshReminders() }
+    /// Ile godzin przed płatnością ma przyjść powiadomienie (0 = w dniu płatności).
+    var reminderHours: Int {
+        didSet { UserDefaults.standard.set(reminderHours, forKey: "reminderHours"); refreshReminders() }
     }
     var soundsEnabled: Bool {
         didSet { UserDefaults.standard.set(soundsEnabled, forKey: "soundsEnabled") }
@@ -42,11 +43,23 @@ final class SubscriptionStore {
         let d = UserDefaults.standard
         currency = d.string(forKey: "currency") ?? "PLN"
         remindersEnabled = d.object(forKey: "remindersEnabled") as? Bool ?? true
-        reminderDays = d.object(forKey: "reminderDays") as? Int ?? 1
         soundsEnabled = d.object(forKey: "soundsEnabled") as? Bool ?? true
         language = d.string(forKey: "language") ?? "Polski"
         userName = d.string(forKey: "userName") ?? "Jan Kowalski"
         userEmail = d.string(forKey: "userEmail") ?? "jan.kowalski@email.com"
+
+        // Godziny przed płatnością (z migracją starego ustawienia w dniach).
+        let hours: Int
+        if let saved = d.object(forKey: "reminderHours") as? Int {
+            hours = saved
+        } else if let oldDays = d.object(forKey: "reminderDays") as? Int {
+            hours = oldDays * 24
+            d.set(hours, forKey: "reminderHours")
+            d.removeObject(forKey: "reminderDays")
+        } else {
+            hours = 24
+        }
+        reminderHours = hours
 
         if let data = d.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([Subscription].self, from: data) {
@@ -54,6 +67,9 @@ final class SubscriptionStore {
         } else {
             subscriptions = Self.sampleData()
         }
+
+        // didSet nie wywołuje się w init, więc planujemy powiadomienia przy starcie.
+        refreshReminders()
     }
 
     // MARK: - Dane przykładowe (zgodne z makietą)
@@ -87,7 +103,7 @@ final class SubscriptionStore {
     func refreshReminders() {
         NotificationManager.reschedule(subscriptions,
                                        enabled: remindersEnabled,
-                                       daysBefore: reminderDays,
+                                       hoursBefore: reminderHours,
                                        money: { [currency] in Self.format($0, currency: currency) })
     }
 

@@ -8,8 +8,34 @@ struct SettingsView: View {
     private let currencies = ["PLN", "EUR", "USD", "GBP"]
     private let languages = ["Polski", "English"]
 
+    /// Dostępne opcje przypomnienia (w godzinach przed płatnością).
+    private let baseReminderOptions = [0, 1, 3, 6, 12, 24, 48, 72, 168]
+
+    /// Opcje + bieżąca wartość, gdyby nie było jej na liście
+    /// (np. po migracji starego ustawienia z dni), żeby Picker zawsze miał zaznaczenie.
+    private var reminderOptions: [Int] {
+        var options = baseReminderOptions
+        if !options.contains(store.reminderHours) {
+            options.append(store.reminderHours)
+        }
+        return options.sorted()
+    }
+
     private var initials: String {
         store.userName.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined()
+    }
+
+    /// Etykieta opcji z polską odmianą (godzinę / godziny / godzin, dzień / dni).
+    private func reminderLabel(_ h: Int) -> String {
+        if h == 0 { return "W dniu płatności" }
+        if h % 24 == 0 {
+            let d = h / 24
+            return d == 1 ? "1 dzień przed" : "\(d) dni przed"
+        }
+        if h == 1 { return "1 godzinę przed" }
+        let n10 = h % 10, n100 = h % 100
+        if (2...4).contains(n10) && !(12...14).contains(n100) { return "\(h) godziny przed" }
+        return "\(h) godzin przed"
     }
 
     var body: some View {
@@ -44,10 +70,10 @@ struct SettingsView: View {
                     Toggle("Przypomnienia o płatnościach", isOn: $store.remindersEnabled)
                         .listRowBackground(Theme.card)
                     if store.remindersEnabled {
-                        Stepper(value: $store.reminderDays, in: 0...14) {
-                            Text(store.reminderDays == 0
-                                 ? "Przypomnij w dniu płatności"
-                                 : "Przypomnij \(store.reminderDays) dni przed")
+                        Picker("Przypomnij", selection: $store.reminderHours) {
+                            ForEach(reminderOptions, id: \.self) { hours in
+                                Text(reminderLabel(hours)).tag(hours)
+                            }
                         }
                         .listRowBackground(Theme.card)
                     }

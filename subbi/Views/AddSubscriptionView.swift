@@ -11,6 +11,9 @@ struct AddSubscriptionView: View {
     @State private var period: BillingPeriod = .month
     @State private var category: SubCategory = .entertainment
     @State private var firstPayment = Date.now
+    /// Godzina płatności (liczy się tylko godzina i minuta, data jest pomijana).
+    @State private var paymentTime = AppCal.cal.date(bySettingHour: NotificationManager.dueHour,
+                                                     minute: 0, second: 0, of: .now) ?? .now
 
     private var parsedPrice: Double? {
         Double(priceText.replacingOccurrences(of: ",", with: "."))
@@ -26,13 +29,21 @@ struct AddSubscriptionView: View {
             : Service.catalog.filter { $0.name.localizedCaseInsensitiveContains(q) }
     }
 
+    /// Data pierwszej płatności połączona z wybraną godziną.
+    private var firstPaymentDateTime: Date {
+        let cal = AppCal.cal
+        let t = cal.dateComponents([.hour, .minute], from: paymentTime)
+        return cal.date(bySettingHour: t.hour ?? 0, minute: t.minute ?? 0, second: 0,
+                        of: cal.startOfDay(for: firstPayment)) ?? firstPayment
+    }
+
     private var draft: Subscription {
         let match = (selected?.name == name) ? selected : nil
         return Subscription(
             name: name.trimmingCharacters(in: .whitespaces),
             price: parsedPrice ?? 0,
             period: period,
-            firstPayment: AppCal.cal.startOfDay(for: firstPayment),
+            firstPayment: firstPaymentDateTime,
             category: category,
             symbol: match?.symbol ?? "creditcard.fill",
             colorHex: match?.colorHex ?? 0x5E6AD2
@@ -179,6 +190,16 @@ struct AddSubscriptionView: View {
                 .labelsHidden()
                 .environment(\.locale, AppCal.locale)
                 .frame(maxWidth: .infinity)
+            Divider().overlay(Color.white.opacity(0.1))
+
+            HStack {
+                Text("Godzina płatności")
+                Spacer()
+                DatePicker("Godzina", selection: $paymentTime, displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .environment(\.locale, AppCal.locale)
+            }
+            .padding(.vertical, 8)
         }
         .padding(.horizontal, 16)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -187,7 +208,7 @@ struct AddSubscriptionView: View {
     @ViewBuilder
     private var infoText: some View {
         if canSave, let next = draft.nextPayment() {
-            Text("Odnowi się co \(period == .month ? "miesiąc" : "rok") od daty pierwszej płatności. Twoja następna płatność: \(next.formatted(.dateTime.month(.abbreviated).day().year().locale(AppCal.locale))).")
+            Text("Odnowi się co \(period == .month ? "miesiąc" : "rok") od daty pierwszej płatności. Twoja następna płatność: \(next.formatted(.dateTime.month(.abbreviated).day().year().hour().minute().locale(AppCal.locale))).")
                 .font(.caption)
                 .foregroundStyle(Theme.muted)
         }
