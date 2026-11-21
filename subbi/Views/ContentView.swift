@@ -6,6 +6,7 @@ enum AppTab: Hashable {
 
 struct ContentView: View {
     var store: SubscriptionStore
+    var auth: AuthStore
     @State private var selection: AppTab = .home
     @State private var showAdd = false
 
@@ -27,7 +28,7 @@ struct ContentView: View {
                 .tabItem { Label("Dodaj", systemImage: "plus") }
                 .tag(AppTab.add)
 
-            SettingsView(store: store)
+            SettingsView(store: store, auth: auth)
                 .tabItem { Label("Ustawienia", systemImage: "gearshape") }
                 .tag(AppTab.settings)
         }

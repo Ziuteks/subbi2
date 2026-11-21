@@ -2,8 +2,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var store: SubscriptionStore
+    var auth: AuthStore
     @State private var showLogoutDialog = false
-    @State private var loggedOut = false
 
     private let currencies = ["PLN", "EUR", "USD", "GBP"]
     private let languages = ["Polski", "English"]
@@ -22,7 +22,7 @@ struct SettingsView: View {
     }
 
     private var initials: String {
-        store.userName.split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined()
+        (auth.user?.name ?? "").split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined()
     }
 
     /// Etykieta opcji z polską odmianą (godzinę / godziny / godzin, dzień / dni).
@@ -43,7 +43,7 @@ struct SettingsView: View {
             List {
                 Section("Konto") {
                     NavigationLink {
-                        ProfileView(store: store)
+                        ProfileView(auth: auth)
                     } label: {
                         HStack(spacing: 12) {
                             Text(initials.isEmpty ? "?" : initials)
@@ -51,12 +51,15 @@ struct SettingsView: View {
                                 .frame(width: 44, height: 44)
                                 .background(Theme.accent.opacity(0.25), in: Circle())
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(store.userName).font(.headline)
-                                Text(store.userEmail).font(.caption).foregroundStyle(Theme.muted)
+                                Text(auth.user?.name ?? "Moje konto").font(.headline)
+                                Text(auth.user?.email ?? "").font(.caption).foregroundStyle(Theme.muted)
                             }
                         }
                     }
                     .listRowBackground(Theme.card)
+
+                    syncRow
+                        .listRowBackground(Theme.card)
                 }
 
                 Section("Subskrypcje i płatności") {
@@ -82,7 +85,7 @@ struct SettingsView: View {
                 }
 
                 Section("Bezpieczeństwo i język") {
-                    NavigationLink("Zmień hasło") { PasswordView() }
+                    NavigationLink("Zmień hasło") { PasswordView(auth: auth) }
                         .listRowBackground(Theme.card)
                     Picker("Język aplikacji", selection: $store.language) {
                         ForEach(languages, id: \.self) { Text($0).tag($0) }
@@ -107,29 +110,80 @@ struct SettingsView: View {
             .navigationTitle("Ustawienia")
             .confirmationDialog("Czy na pewno chcesz się wylogować?",
                                 isPresented: $showLogoutDialog, titleVisibility: .visible) {
-                Button("Wyloguj się", role: .destructive) { loggedOut = true }
+                Button("Wyloguj się", role: .destructive) {
+                    Task { await auth.logout() }
+                }
                 Button("Anuluj", role: .cancel) {}
-            }
-            .alert("Wylogowano", isPresented: $loggedOut) {
-                Button("OK") {}
             } message: {
-                Text("To wersja demonstracyjna bez serwera kont – dane pozostają na urządzeniu.")
+                Text("Subskrypcje zostaną usunięte z tego urządzenia – pozostaną na Twoim koncie.")
             }
         }
+    }
+
+    /// Stan synchronizacji z serwerem; dotknięcie wymusza synchronizację.
+    private var syncRow: some View {
+        Button {
+            Task { await auth.refresh() }
+        } label: {
+            HStack(spacing: 12) {
+                switch auth.syncState {
+                case .idle:
+                    Image(systemName: "checkmark.icloud.fill").foregroundStyle(Theme.accent)
+                    Text("Zsynchronizowano")
+                case .syncing:
+                    ProgressView()
+                    Text("Synchronizacja…")
+                case .failed(let message):
+                    Image(systemName: "exclamationmark.icloud.fill").foregroundStyle(Theme.alert)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Błąd synchronizacji – dotknij, aby ponowić")
+                        Text(message).font(.caption).foregroundStyle(Theme.muted)
+                    }
+                }
+                Spacer()
+            }
+            .foregroundStyle(.white)
+        }
+        .disabled(auth.syncState == .syncing)
     }
 }
 
 struct ProfileView: View {
-    @Bindable var store: SubscriptionStore
+    var auth: AuthStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var email = ""
+    @State private var error: String?
+    @State private var isSaving = false
+
+    private var changed: Bool { name != auth.user?.name || email != auth.user?.email }
+    private var valid: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && email.contains("@")
+    }
 
     var body: some View {
         Form {
             Section("Dane użytkownika") {
-                TextField("Imię i nazwisko", text: $store.userName)
-                TextField("Adres e-mail", text: $store.userEmail)
+                TextField("Imię i nazwisko", text: $name)
+                    .textContentType(.name)
+                TextField("Adres e-mail", text: $email)
+                    .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+            }
+            .listRowBackground(Theme.card)
+
+            Section {
+                Button {
+                    save()
+                } label: {
+                    if isSaving { ProgressView().frame(maxWidth: .infinity) }
+                    else { Text("Zapisz").frame(maxWidth: .infinity) }
+                }
+                .disabled(!changed || !valid || isSaving)
+            } footer: {
+                if let error { Text(error).foregroundStyle(Theme.alert) }
             }
             .listRowBackground(Theme.card)
         }
@@ -137,15 +191,37 @@ struct ProfileView: View {
         .screenBackground()
         .navigationTitle("Konto")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            name = auth.user?.name ?? ""
+            email = auth.user?.email ?? ""
+        }
+    }
+
+    private func save() {
+        error = nil
+        isSaving = true
+        Task {
+            defer { isSaving = false }
+            do {
+                try await auth.updateProfile(name: name.trimmingCharacters(in: .whitespaces),
+                                             email: email.trimmingCharacters(in: .whitespaces))
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
     }
 }
 
 struct PasswordView: View {
+    var auth: AuthStore
     @Environment(\.dismiss) private var dismiss
     @State private var current = ""
     @State private var new = ""
     @State private var repeatNew = ""
     @State private var done = false
+    @State private var error: String?
+    @State private var isSaving = false
 
     private var valid: Bool { new.count >= 8 && new == repeatNew && !current.isEmpty }
 
@@ -159,11 +235,17 @@ struct PasswordView: View {
             .listRowBackground(Theme.card)
 
             Section {
-                Button("Zapisz") { done = true }
-                    .disabled(!valid)
-                    .frame(maxWidth: .infinity)
+                Button {
+                    save()
+                } label: {
+                    if isSaving { ProgressView().frame(maxWidth: .infinity) }
+                    else { Text("Zapisz").frame(maxWidth: .infinity) }
+                }
+                .disabled(!valid || isSaving)
             } footer: {
-                if !new.isEmpty && new != repeatNew {
+                if let error {
+                    Text(error).foregroundStyle(Theme.alert)
+                } else if !new.isEmpty && new != repeatNew {
                     Text("Hasła nie są takie same.").foregroundStyle(Theme.alert)
                 }
             }
@@ -176,7 +258,21 @@ struct PasswordView: View {
         .alert("Hasło zmienione", isPresented: $done) {
             Button("OK") { dismiss() }
         } message: {
-            Text("Wersja demonstracyjna – hasło nie jest wysyłane na serwer.")
+            Text("Na innych urządzeniach trzeba będzie zalogować się ponownie.")
+        }
+    }
+
+    private func save() {
+        error = nil
+        isSaving = true
+        Task {
+            defer { isSaving = false }
+            do {
+                try await auth.changePassword(current: current, new: new)
+                done = true
+            } catch {
+                self.error = error.localizedDescription
+            }
         }
     }
 }

@@ -1,0 +1,47 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+**subbi** is a SwiftUI iOS app for tracking subscriptions (costs, upcoming payments, calendar, stats, payment reminders). Single target and scheme `subbi`, bundle ID `com.kamil-kajta.subbi`, deployment target iOS 27.0, dark mode only. There are no package dependencies and no test target.
+
+Accounts and subscription sync are handled by the backend in the sibling repo **`../subbi-backend`** (NestJS + Prisma + SQLite, with Swagger docs at `/docs`; see its README for the API). Run it with `npm run dev` there.
+
+The backend URL comes **only** from the `API_BASE_URL` build setting on the target, set per configuration (Debug / Release). The value reaches the app through the `SubbiAPIBaseURL` key in `subbi-Info.plist`, which `AuthStore.defaultServerURL` reads. There is no in-app field for it. To test on a phone, point Debug at the Mac's LAN address (e.g. `http://192.168.x.x:3000` or `http://<LocalHostName>.local:3000`); production needs an `https://` URL.
+
+The UI copy and code comments are in **Polish**. Keep new user-facing strings and comments in Polish, and follow the existing grammatical-number rules (e.g. `godzinę` / `godziny` / `godzin`; see `hoursPhrase` in `Notifications.swift` and `reminderLabel` in `SettingsView.swift`). The "language" setting is stored but not wired to any localization yet.
+
+## Build
+
+```sh
+# Build for the simulator
+xcodebuild -project subbi.xcodeproj -scheme subbi -destination 'generic/platform=iOS Simulator' build
+
+# Build and run on a specific simulator (list them with: xcrun simctl list devices)
+xcodebuild -project subbi.xcodeproj -scheme subbi -destination 'platform=iOS Simulator,name=<device>' build
+```
+
+Extra Info.plist keys (local-network permission text, the ATS `NSAllowsLocalNetworking` exception for `http://` to the LAN backend) live in `subbi-Info.plist` at the repo root. It sits outside `subbi/` on purpose, so the synchronized group doesn't copy it as a resource. Xcode merges it with the generated `INFOPLIST_KEY_*` settings.
+
+The project uses Xcode's file-system-synchronized groups, so new `.swift` files under `subbi/` get picked up automatically. Don't edit `project.pbxproj` to add files.
+
+## Architecture
+
+- **Default MainActor isolation** (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`): everything is main-actor unless marked `nonisolated` (as `SubscriptionStore.format` is, so it can be captured in the notification closure).
+- **`SubscriptionStore`** (`Stores/SubscriptionStore.swift`) is the single `@Observable` source of truth for subscriptions and settings. `subbiApp` creates it and passes it explicitly as `store:` to every view; it is also injected with `.environment(store)`. Views that need bindings use `@Bindable var store`.
+  - Persistence goes to `UserDefaults`: subscriptions are stored as JSON under `subscriptions.v1`, and each setting has its own key. Every property persists in its own `didSet`.
+  - Any change to subscriptions, currency, or reminder settings calls `refreshReminders()`. That runs `NotificationManager.reschedule`, which **removes all pending notifications** and schedules up to 3 upcoming payments per subscription over the next 120 days, firing `reminderHours` before 09:00 (`dueHour`) on the payment day.
+  - `init` migrates the old `reminderDays` setting to `reminderHours`. On first launch with no saved data it seeds `sampleData()`.
+  - Derived data (totals, `upcoming`, `payments(inMonthOf:)`, `monthTotals`) is computed on the fly. Nothing is cached.
+- **`AuthStore`** (`Stores/AuthStore.swift`) owns the session and the sync. `subbiApp` shows `LoginView` until `auth.isLoggedIn`. The token is kept in the Keychain (`Keychain.swift`); the user profile and server URL are in `UserDefaults`.
+  - Every user change to `store.subscriptions` calls `store.onSubscriptionsChange`. That marks the list dirty (persisted as `sync.dirty`) and, after a debounce, PUTs the **whole list**.
+  - Writing data that came from the server must go through `store.replaceSubscriptions(_:)`, which doesn't trigger a push.
+  - On login or registration, a non-empty server list replaces the local one; an empty server list is filled with the local one. `refresh()` runs whenever the scene becomes active: it pushes dirty changes first, then pulls the server list.
+  - Any 401 ends the session. Logout clears the subscriptions from the device.
+- **`APIClient`** (`Stores/APIClient.swift`) is a stateless URLSession wrapper. JSON dates are ISO 8601. The server's Polish `{ "error" }` messages come through as `APIError.localizedDescription`, so they can be shown to the user directly. The `Subscription` Codable shape is the API contract: change it together with `subbi-backend/src/schemas.ts`.
+- **Date logic** (`Models/Models.swift`): always use `AppCal.cal` (Gregorian, Monday first, `pl_PL`) and `AppCal.locale`, never `Calendar.current`. Payment dates are generated by `Subscription.occurrences(from:to:)`, which adds whole months or years to `firstPayment`. Money formatting goes through `store.money(_:)`.
+- **`Service.catalog`** is the hard-coded list of preset services (name, SF Symbol, brand color, category, default price) used by the add form and the sample data.
+- **Navigation** (`Views/ContentView.swift`): a `TabView` with a fake "Dodaj" tab. Selecting it puts the previous tab back and opens `AddSubscriptionView` as a sheet.
+- **Styling** (`Views/Theme.swift`): use the `Theme` colors, `.cardStyle()`, `.screenBackground()`, `ServiceIcon`, and `Color(hex:)`. Global UIKit tab bar and nav bar appearance is set in `subbiApp.init`. Charts use Swift Charts.
+- **Feedback**: `SoundManager` plays system sounds and haptics, gated by `store.soundsEnabled`.

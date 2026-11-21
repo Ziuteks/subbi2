@@ -10,8 +10,16 @@ final class SubscriptionStore {
     private let storageKey = "subscriptions.v1"
 
     var subscriptions: [Subscription] {
-        didSet { persist(); refreshReminders() }
+        didSet {
+            persist()
+            refreshReminders()
+            if !isReplacing { onSubscriptionsChange?() }
+        }
     }
+
+    /// Wywoływane po każdej zmianie listy przez użytkownika (synchronizacja z serwerem – `AuthStore`).
+    @ObservationIgnored var onSubscriptionsChange: (() -> Void)?
+    @ObservationIgnored private var isReplacing = false
     var currency: String {
         didSet { UserDefaults.standard.set(currency, forKey: "currency"); refreshReminders() }
     }
@@ -32,12 +40,6 @@ final class SubscriptionStore {
     var language: String {
         didSet { UserDefaults.standard.set(language, forKey: "language") }
     }
-    var userName: String {
-        didSet { UserDefaults.standard.set(userName, forKey: "userName") }
-    }
-    var userEmail: String {
-        didSet { UserDefaults.standard.set(userEmail, forKey: "userEmail") }
-    }
 
     init() {
         let d = UserDefaults.standard
@@ -45,8 +47,6 @@ final class SubscriptionStore {
         remindersEnabled = d.object(forKey: "remindersEnabled") as? Bool ?? true
         soundsEnabled = d.object(forKey: "soundsEnabled") as? Bool ?? true
         language = d.string(forKey: "language") ?? "Polski"
-        userName = d.string(forKey: "userName") ?? "Jan Kowalski"
-        userEmail = d.string(forKey: "userEmail") ?? "jan.kowalski@email.com"
 
         // Godziny przed płatnością (z migracją starego ustawienia w dniach).
         let hours: Int
@@ -116,6 +116,13 @@ final class SubscriptionStore {
 
     func delete(_ sub: Subscription) {
         subscriptions.removeAll { $0.id == sub.id }
+    }
+
+    /// Podmienia listę danymi z serwera (lub czyści przy wylogowaniu) bez ponownego wysyłania jej na serwer.
+    func replaceSubscriptions(_ list: [Subscription]) {
+        isReplacing = true
+        defer { isReplacing = false }
+        subscriptions = list
     }
 
     // MARK: - Obliczenia

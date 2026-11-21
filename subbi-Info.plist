@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Domyślny adres backendu – ustawiany w Build Settings (API_BASE_URL), osobno dla Debug i Release. -->
+	<key>SubbiAPIBaseURL</key>
+	<string>$(API_BASE_URL)</string>
+	<!-- Treść pytania o dostęp do sieci lokalnej (połączenie z backendem na komputerze w domowej sieci). -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Subbi łączy się z serwerem kont w Twojej sieci lokalnej, aby zalogować Cię i synchronizować subskrypcje.</string>
+	<!-- Zezwala na http:// do adresów lokalnych (IP w sieci domowej, *.local, localhost). Ruch w internecie nadal wymaga HTTPS. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>
