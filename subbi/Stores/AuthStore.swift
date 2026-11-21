@@ -193,7 +193,7 @@ final class AuthStore {
     private func handleUnauthorized(_ error: Error) -> Bool {
         guard (error as? APIError)?.isUnauthorized == true, isLoggedIn else { return false }
         clearSession()
-        notice = "Sesja wygasła. Zaloguj się ponownie."
+        notice = String(localized: "Sesja wygasła. Zaloguj się ponownie.", bundle: .appLanguage)
         return true
     }
 

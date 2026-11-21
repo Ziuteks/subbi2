@@ -35,20 +35,41 @@ extension View {
     }
 }
 
-/// Kwadratowa ikona usługi (kolor marki + symbol SF).
+/// Kwadratowa ikona usługi: logo marki (`symbol` = `brand:<nazwa>`, kafelek z Assets.xcassets/Brands)
+/// albo kolor + symbol SF dla pozostałych.
 struct ServiceIcon: View {
     let symbol: String
     let color: Color
     var size: CGFloat = 40
 
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: size * 0.25, style: .continuous) }
+
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
-            .fill(color)
-            .frame(width: size, height: size)
-            .overlay(
-                Image(systemName: symbol)
-                    .font(.system(size: size * 0.45, weight: .semibold))
-                    .foregroundStyle(.white)
-            )
+        if let brand = symbol.brandAssetName {
+            Image(brand)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: size, height: size)
+                .clipShape(shape)
+                // Delikatna obwódka, żeby czarne kafelki (Netflix, Apple TV…) nie zlewały się z ciemnym tłem.
+                .overlay(shape.strokeBorder(.white.opacity(0.12), lineWidth: 0.5))
+                .accessibilityHidden(true)
+        } else {
+            shape
+                .fill(color)
+                .frame(width: size, height: size)
+                .overlay(
+                    Image(systemName: symbol)
+                        .font(.system(size: size * 0.45, weight: .semibold))
+                        .foregroundStyle(.white)
+                )
+        }
+    }
+}
+
+private extension String {
+    /// `brand:netflix` → `brand-netflix` (nazwa zasobu), inaczej nil.
+    var brandAssetName: String? {
+        hasPrefix("brand:") ? "brand-" + dropFirst("brand:".count) : nil
     }
 }

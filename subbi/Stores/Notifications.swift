@@ -40,8 +40,8 @@ enum NotificationManager {
                 let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
 
                 let content = UNMutableNotificationContent()
-                content.title = "Zbliża się płatność"
-                content.body = "\(sub.name): \(money(sub.price)) – \(when)"
+                content.title = String(localized: "Zbliża się płatność", bundle: .appLanguage)
+                content.body = String(localized: "\(sub.name): \(money(sub.price)) – \(when)", bundle: .appLanguage)
                 content.sound = .default
 
                 let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
@@ -55,20 +55,13 @@ enum NotificationManager {
 
     private static func whenText(hoursBefore h: Int) -> String {
         switch h {
-        case 0:  return "dziś"
-        case 24: return "jutro"
+        case 0:  return String(localized: "dziś", bundle: .appLanguage)
+        case 24: return String(localized: "jutro", bundle: .appLanguage)
         default:
-            if h % 24 == 0 { return "za \(h / 24) dni" }
-            return "za \(hoursPhrase(h))"
+            // „za 3 dni” / „in 3 days”, „za 2 godziny” / „in 2 hours” (odmiana w Plural)
+            let amount = h % 24 == 0 ? Plural.days(h / 24) : Plural.hours(h)
+            return String(localized: "za \(amount)", bundle: .appLanguage)
         }
-    }
-
-    /// Polska odmiana: 1 godzinę, 2–4 godziny, 5+ godzin.
-    private static func hoursPhrase(_ h: Int) -> String {
-        if h == 1 { return "1 godzinę" }
-        let n10 = h % 10, n100 = h % 100
-        if (2...4).contains(n10) && !(12...14).contains(n100) { return "\(h) godziny" }
-        return "\(h) godzin"
     }
 }
 

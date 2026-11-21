@@ -37,16 +37,24 @@ final class SubscriptionStore {
     var soundsEnabled: Bool {
         didSet { UserDefaults.standard.set(soundsEnabled, forKey: "soundsEnabled") }
     }
-    var language: String {
-        didSet { UserDefaults.standard.set(language, forKey: "language") }
+    /// Język interfejsu – zmiana od razu przełącza tłumaczenia i formaty dat/kwot.
+    var language: AppLanguage {
+        didSet {
+            UserDefaults.standard.set(language.rawValue, forKey: "language")
+            AppLanguage.activate(language)
+            refreshReminders() // treść powiadomień w nowym języku
+        }
     }
 
     init() {
         let d = UserDefaults.standard
+        // Język najpierw – od niego zależą tłumaczenia i AppCal.
+        let lang = AppLanguage.saved(in: d)
+        AppLanguage.activate(lang)
+        language = lang
         currency = d.string(forKey: "currency") ?? "PLN"
         remindersEnabled = d.object(forKey: "remindersEnabled") as? Bool ?? true
         soundsEnabled = d.object(forKey: "soundsEnabled") as? Bool ?? true
-        language = d.string(forKey: "language") ?? "Polski"
 
         // Godziny przed płatnością (z migracją starego ustawienia w dniach).
         let hours: Int
@@ -156,6 +164,8 @@ final class SubscriptionStore {
             return MonthTotal(date: m, amount: sum)
         }
     }
+    
+    
 
     // MARK: - Formatowanie
 
@@ -172,8 +182,8 @@ final class SubscriptionStore {
 
     func dayText(_ date: Date) -> String {
         let cal = AppCal.cal
-        if cal.isDateInToday(date) { return "Dziś" }
-        if cal.isDateInTomorrow(date) { return "Jutro" }
+        if cal.isDateInToday(date) { return String(localized: "Dziś", bundle: .appLanguage) }
+        if cal.isDateInTomorrow(date) { return String(localized: "Jutro", bundle: .appLanguage) }
         return date.formatted(.dateTime.day().month(.abbreviated).locale(AppCal.locale))
     }
 }

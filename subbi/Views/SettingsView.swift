@@ -6,7 +6,6 @@ struct SettingsView: View {
     @State private var showLogoutDialog = false
 
     private let currencies = ["PLN", "EUR", "USD", "GBP"]
-    private let languages = ["Polski", "English"]
 
     /// Dostępne opcje przypomnienia (w godzinach przed płatnością).
     private let baseReminderOptions = [0, 1, 3, 6, 12, 24, 48, 72, 168]
@@ -25,17 +24,11 @@ struct SettingsView: View {
         (auth.user?.name ?? "").split(separator: " ").prefix(2).compactMap { $0.first }.map(String.init).joined()
     }
 
-    /// Etykieta opcji z polską odmianą (godzinę / godziny / godzin, dzień / dni).
+    /// Etykieta opcji z odmianą liczebnika („3 godziny przed”, „2 dni przed” / „3 hours before”).
     private func reminderLabel(_ h: Int) -> String {
-        if h == 0 { return "W dniu płatności" }
-        if h % 24 == 0 {
-            let d = h / 24
-            return d == 1 ? "1 dzień przed" : "\(d) dni przed"
-        }
-        if h == 1 { return "1 godzinę przed" }
-        let n10 = h % 10, n100 = h % 100
-        if (2...4).contains(n10) && !(12...14).contains(n100) { return "\(h) godziny przed" }
-        return "\(h) godzin przed"
+        if h == 0 { return String(localized: "W dniu płatności", bundle: .appLanguage) }
+        let amount = h % 24 == 0 ? Plural.days(h / 24) : Plural.hours(h)
+        return String(localized: "\(amount) przed", bundle: .appLanguage)
     }
 
     var body: some View {
@@ -51,7 +44,7 @@ struct SettingsView: View {
                                 .frame(width: 44, height: 44)
                                 .background(Theme.accent.opacity(0.25), in: Circle())
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(auth.user?.name ?? "Moje konto").font(.headline)
+                                Text(auth.user?.name ?? String(localized: "Moje konto", bundle: .appLanguage)).font(.headline)
                                 Text(auth.user?.email ?? "").font(.caption).foregroundStyle(Theme.muted)
                             }
                         }
@@ -88,7 +81,7 @@ struct SettingsView: View {
                     NavigationLink("Zmień hasło") { PasswordView(auth: auth) }
                         .listRowBackground(Theme.card)
                     Picker("Język aplikacji", selection: $store.language) {
-                        ForEach(languages, id: \.self) { Text($0).tag($0) }
+                        ForEach(AppLanguage.allCases) { Text(verbatim: $0.nativeName).tag($0) }
                     }
                     .listRowBackground(Theme.card)
                 }
@@ -99,6 +92,16 @@ struct SettingsView: View {
                     } label: {
                         Text("Wyloguj się").frame(maxWidth: .infinity)
                     }
+                    // Okienko podpięte do samego przycisku, żeby wyświetlało się przy nim (a nie u góry ekranu).
+                    .confirmationDialog("Czy na pewno chcesz się wylogować?",
+                                        isPresented: $showLogoutDialog, titleVisibility: .visible) {
+                        Button("Wyloguj się", role: .destructive) {
+                            Task { await auth.logout() }
+                        }
+                        Button("Anuluj", role: .cancel) {}
+                    } message: {
+                        Text("Subskrypcje zostaną usunięte z tego urządzenia – pozostaną na Twoim koncie.")
+                    }
                     .listRowBackground(Color.clear)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10).stroke(Theme.alert, lineWidth: 1)
@@ -108,15 +111,6 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .screenBackground()
             .navigationTitle("Ustawienia")
-            .confirmationDialog("Czy na pewno chcesz się wylogować?",
-                                isPresented: $showLogoutDialog, titleVisibility: .visible) {
-                Button("Wyloguj się", role: .destructive) {
-                    Task { await auth.logout() }
-                }
-                Button("Anuluj", role: .cancel) {}
-            } message: {
-                Text("Subskrypcje zostaną usunięte z tego urządzenia – pozostaną na Twoim koncie.")
-            }
         }
     }
 

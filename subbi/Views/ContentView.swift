@@ -7,7 +7,7 @@ enum AppTab: Hashable {
 struct ContentView: View {
     var store: SubscriptionStore
     var auth: AuthStore
-    @State private var selection: AppTab = .home
+    @Binding var selection: AppTab
     @State private var showAdd = false
 
     var body: some View {

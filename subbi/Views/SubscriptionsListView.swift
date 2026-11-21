@@ -100,7 +100,7 @@ struct SubscriptionsListView: View {
 
     private func row(_ sub: Subscription, _ date: Date) -> some View {
         HStack(spacing: 12) {
-            ServiceIcon(symbol: sub.symbol, color: sub.color, size: 38)
+            ServiceIcon(symbol: sub.iconSymbol, color: sub.color, size: 38)
             VStack(alignment: .leading, spacing: 2) {
                 Text(sub.name).font(.subheadline.weight(.semibold))
                 Text(store.dayText(date))

@@ -6,7 +6,7 @@ struct LoginView: View {
     private enum Mode: String, CaseIterable, Identifiable {
         case login, register
         var id: String { rawValue }
-        var title: String { self == .login ? "Logowanie" : "Rejestracja" }
+        var title: String { self == .login ? String(localized: "Logowanie", bundle: .appLanguage) : String(localized: "Rejestracja", bundle: .appLanguage) }
     }
 
     private enum Field: Hashable { case name, email, password, repeatPassword }
@@ -35,8 +35,8 @@ struct LoginView: View {
 
     private var hint: String? {
         guard mode == .register else { return nil }
-        if !password.isEmpty && password.count < 8 { return "Hasło musi mieć co najmniej 8 znaków." }
-        if !repeatPassword.isEmpty && password != repeatPassword { return "Hasła nie są takie same." }
+        if !password.isEmpty && password.count < 8 { return String(localized: "Hasło musi mieć co najmniej 8 znaków.", bundle: .appLanguage) }
+        if !repeatPassword.isEmpty && password != repeatPassword { return String(localized: "Hasła nie są takie same.", bundle: .appLanguage) }
         return nil
     }
 
@@ -112,7 +112,7 @@ struct LoginView: View {
     }
 
     @ViewBuilder
-    private func field(_ title: String, text: Binding<String>, id: Field, secure: Bool = false) -> some View {
+    private func field(_ title: LocalizedStringKey, text: Binding<String>, id: Field, secure: Bool = false) -> some View {
         Group {
             if secure {
                 SecureField(title, text: text)

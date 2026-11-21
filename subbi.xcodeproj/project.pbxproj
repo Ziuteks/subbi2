@@ -80,9 +80,10 @@
 				};
 			};
 			buildConfigurationList = A124068230AE153D0086B463 /* Build configuration list for PBXProject "subbi" */;
-			developmentRegion = en;
+			developmentRegion = pl;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				pl,
 				en,
 				Base,
 			);

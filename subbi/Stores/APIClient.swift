@@ -86,7 +86,7 @@ struct APIClient {
                                            body: (any Encodable)? = nil) async throws -> Response {
         let trimmed = baseURL.trimmingCharacters(in: .whitespaces)
         guard let url = URL(string: trimmed + path), url.scheme?.hasPrefix("http") == true, url.host() != nil else {
-            throw APIError(status: 0, message: "Nieprawidłowy adres serwera.")
+            throw APIError(status: 0, message: String(localized: "Nieprawidłowy adres serwera.", bundle: .appLanguage))
         }
 
         var request = URLRequest(url: url, timeoutInterval: 15)
@@ -105,20 +105,22 @@ struct APIClient {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw APIError(status: 0, message: "Nie można połączyć się z serwerem. Sprawdź adres i połączenie z internetem.")
+            throw APIError(status: 0, message: String(localized: "Nie można połączyć się z serwerem. Sprawdź adres i połączenie z internetem.", bundle: .appLanguage))
         }
 
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            let message = (try? Self.decoder.decode(ErrorBody.self, from: data))?.error
-                ?? "Błąd serwera (\(status))."
+            // Serwer odpowiada po polsku – tłumaczymy znane komunikaty na wybrany język.
+            let serverMessage = (try? Self.decoder.decode(ErrorBody.self, from: data))?.error
+            let message = serverMessage.map(AppLanguage.translateServerMessage)
+                ?? String(localized: "Błąd serwera (\(status)).", bundle: .appLanguage)
             throw APIError(status: status, message: message)
         }
 
         do {
             return try Self.decoder.decode(Response.self, from: data)
         } catch {
-            throw APIError(status: status, message: "Nieoczekiwana odpowiedź serwera.")
+            throw APIError(status: status, message: String(localized: "Nieoczekiwana odpowiedź serwera.", bundle: .appLanguage))
         }
     }
 }

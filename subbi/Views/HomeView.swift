@@ -23,7 +23,7 @@ struct HomeView: View {
     private var nextPaymentCard: some View {
         HStack(spacing: 12) {
             if let next = store.nextPayment {
-                ServiceIcon(symbol: next.sub.symbol, color: next.sub.color, size: 44)
+                ServiceIcon(symbol: next.sub.iconSymbol, color: next.sub.color, size: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Następna płatność")
                         .font(.caption.weight(.semibold))
@@ -70,7 +70,7 @@ struct HomeView: View {
 }
 
 struct StatCard: View {
-    let title: String
+    let title: LocalizedStringKey
     let value: String
 
     var body: some View {

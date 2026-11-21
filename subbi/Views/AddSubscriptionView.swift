@@ -208,7 +208,8 @@ struct AddSubscriptionView: View {
     @ViewBuilder
     private var infoText: some View {
         if canSave, let next = draft.nextPayment() {
-            Text("Odnowi się co \(period == .month ? "miesiąc" : "rok") od daty pierwszej płatności. Twoja następna płatność: \(next.formatted(.dateTime.month(.abbreviated).day().year().hour().minute().locale(AppCal.locale))).")
+            let unit = period == .month ? String(localized: "miesiąc", bundle: .appLanguage) : String(localized: "rok", bundle: .appLanguage)
+            Text("Odnowi się co \(unit) od daty pierwszej płatności. Twoja następna płatność: \(next.formatted(.dateTime.month(.abbreviated).day().year().hour().minute().locale(AppCal.locale))).")
                 .font(.caption)
                 .foregroundStyle(Theme.muted)
         }
@@ -218,7 +219,9 @@ struct AddSubscriptionView: View {
         selected = service
         name = service.name
         category = service.category
-        priceText = String(format: "%.2f", service.price).replacingOccurrences(of: ".", with: ",")
+        let price = String(format: "%.2f", service.price)
+        // Separator dziesiętny jak w wybranym języku (parsedPrice przyjmuje oba).
+        priceText = AppLanguage.current == .pl ? price.replacingOccurrences(of: ".", with: ",") : price
         SoundManager.tap(enabled: store.soundsEnabled)
     }
 

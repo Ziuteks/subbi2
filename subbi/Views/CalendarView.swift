@@ -5,7 +5,12 @@ struct CalendarView: View {
     @State private var month: Date = AppCal.cal.dateInterval(of: .month, for: .now)?.start ?? .now
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
-    private let weekdays = ["PN", "WT", "ŚR", "CZ", "PT", "SB", "ND"]
+    /// Skróty dni tygodnia od poniedziałku.
+    private var weekdays: [String] {
+        AppLanguage.current == .en
+            ? ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
+            : ["PN", "WT", "ŚR", "CZ", "PT", "SB", "ND"]
+    }
 
     private var payments: [(sub: Subscription, date: Date)] { store.payments(inMonthOf: month) }
 
@@ -89,7 +94,7 @@ struct CalendarView: View {
             } else {
                 ForEach(Array(payments.enumerated()), id: \.offset) { idx, item in
                     HStack(spacing: 12) {
-                        ServiceIcon(symbol: item.sub.symbol, color: item.sub.color, size: 30)
+                        ServiceIcon(symbol: item.sub.iconSymbol, color: item.sub.color, size: 30)
                         Text(item.sub.name).font(.subheadline.weight(.medium))
                         Spacer()
                         Text(item.date.formatted(.dateTime.day(.twoDigits).month(.twoDigits).year().locale(AppCal.locale)))

@@ -2,8 +2,16 @@ import SwiftUI
 import Charts
 
 enum StatRange: String, CaseIterable, Identifiable {
-    case day = "Dzień", week = "Tydzień", month = "Miesiąc", year = "Rok"
+    case day, week, month, year
     var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .day: return String(localized: "Dzień", bundle: .appLanguage)
+        case .week: return String(localized: "Tydzień", bundle: .appLanguage)
+        case .month: return String(localized: "Miesiąc", bundle: .appLanguage)
+        case .year: return String(localized: "Rok", bundle: .appLanguage)
+        }
+    }
     /// Przez ile dzielimy koszt roczny, aby dostać kwotę dla zakresu.
     var divisor: Double {
         switch self {
@@ -20,6 +28,7 @@ struct StatsView: View {
     @State private var range: StatRange = .week
     @State private var showDetails = false
     @State private var showTop = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var amounts: [(sub: Subscription, amount: Double)] {
         store.subscriptions.map { ($0, $0.yearlyCost / range.divisor) }
@@ -39,7 +48,7 @@ struct StatsView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     Picker("Zakres", selection: $range) {
-                        ForEach(StatRange.allCases) { Text($0.rawValue).tag($0) }
+                        ForEach(StatRange.allCases) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.segmented)
 
@@ -115,23 +124,38 @@ struct StatsView: View {
 
     private var barCard: some View {
         let totals = store.monthTotals(last: 6)
+        // Stała skala – inaczej falujące słupki zmieniałyby maksimum osi i całość by „skakała”.
+        let top = max((totals.map(\.amount).max() ?? 0) * 1.1, 1)
         return VStack(alignment: .leading, spacing: 12) {
             Text("Wydatki (ostatnie 6 mies.)").font(.headline)
-            Chart(totals) { item in
-                BarMark(x: .value("Miesiąc", item.date, unit: .month),
-                        y: .value("Kwota", item.amount))
-                    .foregroundStyle(Theme.accent)
-                    .cornerRadius(4)
-            }
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .month)) { _ in
-                    AxisValueLabel(format: .dateTime.month(.abbreviated).locale(AppCal.locale))
+            // Odświeżane tylko, gdy wykres jest widoczny; wstrzymane przy „Ogranicz ruch”.
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+                let time = context.date.timeIntervalSinceReferenceDate
+                Chart(Array(totals.enumerated()), id: \.element.id) { entry in
+                    BarMark(x: .value("Miesiąc", entry.element.date, unit: .month),
+                            y: .value("Kwota", entry.element.amount * Self.wave(at: time, bar: entry.offset,
+                                                                                  enabled: !reduceMotion)))
+                        .foregroundStyle(Theme.accent)
+                        .cornerRadius(4)
                 }
+                .chartYScale(domain: 0...top)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) { _ in
+                        AxisValueLabel(format: .dateTime.month(.abbreviated).locale(AppCal.locale))
+                    }
+                }
+                .chartYAxis(.hidden)
             }
-            .chartYAxis(.hidden)
             .frame(height: 140)
         }
         .cardStyle()
+    }
+
+    /// Mnożnik wysokości słupka: lekka sinusoida (±3,5%, okres ~3 s) przesunięta w fazie
+    /// dla kolejnych słupków, więc fala „przepływa” od lewej do prawej.
+    private static func wave(at time: TimeInterval, bar: Int, enabled: Bool) -> Double {
+        guard enabled else { return 1 }
+        return 1 + 0.035 * sin(time * 2.0 - Double(bar) * 0.8)
     }
 
     // MARK: Rozwijane sekcje
@@ -153,7 +177,7 @@ struct StatsView: View {
             DisclosureGroup("Najdroższe usługi", isExpanded: $showTop) {
                 VStack(spacing: 8) {
                     ForEach(store.subscriptions.sorted { $0.yearlyCost > $1.yearlyCost }.prefix(3)) { sub in
-                        row(sub, sub.yearlyCost, suffix: "rocznie")
+                        row(sub, sub.yearlyCost, suffix: String(localized: "rocznie", bundle: .appLanguage))
                     }
                 }
                 .padding(.top, 8)
@@ -167,7 +191,7 @@ struct StatsView: View {
 
     private func row(_ sub: Subscription, _ amount: Double, suffix: String? = nil) -> some View {
         HStack(spacing: 10) {
-            ServiceIcon(symbol: sub.symbol, color: sub.color, size: 28)
+            ServiceIcon(symbol: sub.iconSymbol, color: sub.color, size: 28)
             Text(sub.name).font(.subheadline)
             Spacer()
             Text(store.money(amount) + (suffix.map { " \($0)" } ?? ""))
