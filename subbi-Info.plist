@@ -8,6 +8,12 @@
 	<!-- Treść pytania o dostęp do sieci lokalnej (połączenie z backendem na komputerze w domowej sieci). -->
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Subbi łączy się z serwerem kont w Twojej sieci lokalnej, aby zalogować Cię i synchronizować subskrypcje.</string>
+	<!-- Ekran startowy (przed uruchomieniem aplikacji) w kolorze tła – płynne przejście w animację startową. -->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 	<!-- Zezwala na http:// do adresów lokalnych (IP w sieci domowej, *.local, localhost). Ruch w internecie nadal wymaga HTTPS. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
