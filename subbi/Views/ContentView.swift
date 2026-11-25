@@ -1,14 +1,13 @@
 import SwiftUI
 
 enum AppTab: Hashable {
-    case home, calendar, stats, add, settings
+    case home, calendar, stats, settings
 }
 
 struct ContentView: View {
     var store: SubscriptionStore
     var auth: AuthStore
     @Binding var selection: AppTab
-    @State private var showAdd = false
 
     var body: some View {
         TabView(selection: $selection) {
@@ -20,29 +19,13 @@ struct ContentView: View {
                 .tabItem { Label("Kalendarz", systemImage: "calendar") }
                 .tag(AppTab.calendar)
 
-            StatsView(store: store)
+            StatsView(store: store, isActive: selection == .stats)
                 .tabItem { Label("Statystyki", systemImage: "chart.bar.fill") }
                 .tag(AppTab.stats)
-
-            Color.clear
-                .tabItem { Label("Dodaj", systemImage: "plus") }
-                .tag(AppTab.add)
 
             SettingsView(store: store, auth: auth)
                 .tabItem { Label("Ustawienia", systemImage: "gearshape") }
                 .tag(AppTab.settings)
-        }
-        // Zakładka „Dodaj" otwiera formularz wysuwany od dołu i nie zmienia ekranu.
-        .onChange(of: selection) { old, new in
-            if new == .add {
-                selection = old
-                showAdd = true
-            }
-        }
-        .sheet(isPresented: $showAdd) {
-            AddSubscriptionView(store: store)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
         }
     }
 }

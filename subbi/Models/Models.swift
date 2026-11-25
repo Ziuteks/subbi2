@@ -53,13 +53,17 @@ struct Subscription: Identifiable, Codable, Hashable {
     var category: SubCategory
     var symbol: String
     var colorHex: UInt32
+    /// Moment dezaktywacji (nil = aktywna). Od niego nie ma już płatności, wcześniejsze zostają w historii.
+    var deactivatedAt: Date?
 
+    var isActive: Bool { deactivatedAt == nil }
     var color: Color { Color(hex: colorHex) }
     var monthlyCost: Double { period == .month ? price : price / 12 }
     var yearlyCost: Double { period == .month ? price * 12 : price }
 
-    /// Daty płatności w przedziale [start, end).
+    /// Daty płatności w przedziale [start, end), najdalej do dezaktywacji.
     func occurrences(from start: Date, to end: Date) -> [Date] {
+        let end = min(end, deactivatedAt ?? end)
         var result: [Date] = []
         var n = 0
         while let d = AppCal.cal.date(byAdding: period.component, value: n, to: firstPayment), d < end {
@@ -75,6 +79,7 @@ struct Subscription: Identifiable, Codable, Hashable {
     var iconSymbol: String { Service.matching(name)?.symbol ?? symbol }
 
     func nextPayment(after ref: Date = .now) -> Date? {
+        guard isActive else { return nil }
         let start = AppCal.cal.startOfDay(for: ref)
         guard let end = AppCal.cal.date(byAdding: .day, value: 400, to: start) else { return nil }
         return occurrences(from: start, to: end).first

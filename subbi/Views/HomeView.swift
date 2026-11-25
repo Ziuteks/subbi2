@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     var store: SubscriptionStore
+    @State private var showAdd = false
 
     var body: some View {
         NavigationStack {
@@ -11,12 +12,18 @@ struct HomeView: View {
                     StatCard(title: "Twoje roczne wydatki", value: store.money(store.yearlyTotal))
                     nextPaymentCard
                     allSubscriptionsLink
+                    addButton
                 }
                 .padding(16)
             }
             .screenBackground()
             .navigationTitle("Ekran główny")
             .navigationBarTitleDisplayMode(.inline)
+        }
+        .sheet(isPresented: $showAdd) {
+            AddSubscriptionView(store: store)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -56,7 +63,7 @@ struct HomeView: View {
                 Text("Moje subskrypcje")
                     .font(.headline)
                 Spacer()
-                Text("\(store.subscriptions.count)")
+                Text("\(store.activeSubscriptions.count)")
                     .foregroundStyle(Theme.muted)
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
@@ -66,6 +73,18 @@ struct HomeView: View {
             .cardStyle()
         }
         .buttonStyle(.plain)
+    }
+
+    private var addButton: some View {
+        Button { showAdd = true } label: {
+            Label("Dodaj subskrypcję", systemImage: "plus")
+                .font(.headline)
+                .foregroundStyle(.black)
+                .frame(maxWidth: .infinity)
+                .padding(16)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .buttonStyle(DimmingButtonStyle())
     }
 }
 

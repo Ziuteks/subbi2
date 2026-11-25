@@ -2,6 +2,8 @@ import SwiftUI
 
 struct CalendarView: View {
     var store: SubscriptionStore
+    /// Subskrypcja otwarta do edycji.
+    @State private var editing: Subscription?
     @State private var month: Date = AppCal.cal.dateInterval(of: .month, for: .now)?.start ?? .now
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
@@ -44,6 +46,11 @@ struct CalendarView: View {
             .screenBackground()
             .navigationTitle("Kalendarz")
             .navigationBarTitleDisplayMode(.inline)
+        }
+        .sheet(item: $editing) { sub in
+            AddSubscriptionView(store: store, editing: sub)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -93,17 +100,21 @@ struct CalendarView: View {
                     .padding(.vertical, 8)
             } else {
                 ForEach(Array(payments.enumerated()), id: \.offset) { idx, item in
-                    HStack(spacing: 12) {
-                        ServiceIcon(symbol: item.sub.iconSymbol, color: item.sub.color, size: 30)
-                        Text(item.sub.name).font(.subheadline.weight(.medium))
-                        Spacer()
-                        Text(item.date.formatted(.dateTime.day(.twoDigits).month(.twoDigits).year().locale(AppCal.locale)))
-                            .font(.footnote)
-                            .foregroundStyle(Theme.muted)
-                        Text(store.money(item.sub.price))
-                            .font(.footnote.weight(.semibold))
+                    Button { editing = item.sub } label: {
+                        HStack(spacing: 12) {
+                            ServiceIcon(symbol: item.sub.iconSymbol, color: item.sub.color, size: 30)
+                            Text(item.sub.name).font(.subheadline.weight(.medium))
+                            Spacer()
+                            Text(item.date.formatted(.dateTime.day(.twoDigits).month(.twoDigits).year().locale(AppCal.locale)))
+                                .font(.footnote)
+                                .foregroundStyle(Theme.muted)
+                            Text(store.money(item.sub.price))
+                                .font(.footnote.weight(.semibold))
+                        }
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle()) // cały wiersz reaguje na dotknięcie, także puste miejsce
                     }
-                    .padding(.vertical, 10)
+                    .buttonStyle(.plain)
                     if idx < payments.count - 1 { Divider().overlay(Color.white.opacity(0.1)) }
                 }
             }

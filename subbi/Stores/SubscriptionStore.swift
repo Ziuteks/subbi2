@@ -30,7 +30,7 @@ final class SubscriptionStore {
             refreshReminders()
         }
     }
-    /// Ile godzin przed płatnością ma przyjść powiadomienie (0 = w dniu płatności).
+    /// Ile godzin przed płatnością ma przyjść powiadomienie.
     var reminderHours: Int {
         didSet { UserDefaults.standard.set(reminderHours, forKey: "reminderHours"); refreshReminders() }
     }
@@ -67,7 +67,9 @@ final class SubscriptionStore {
         } else {
             hours = 24
         }
-        reminderHours = hours
+        // Opcja „w dniu płatności” (0 h) została usunięta – zastępuje ją najbliższa: godzina przed.
+        reminderHours = max(1, hours)
+        if hours < 1 { d.set(1, forKey: "reminderHours") }
 
         if let data = d.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([Subscription].self, from: data) {
@@ -85,7 +87,8 @@ final class SubscriptionStore {
     private static func sampleData() -> [Subscription] {
         func make(_ name: String, _ price: Double, _ date: Date) -> Subscription {
             let s = Service.catalog.first { $0.name == name }
-            return Subscription(name: name, price: price, period: .month, firstPayment: date,
+            let due = AppCal.cal.date(bySettingHour: NotificationManager.dueHour, minute: 0, second: 0, of: date) ?? date
+            return Subscription(name: name, price: price, period: .month, firstPayment: due,
                                 category: s?.category ?? .other,
                                 symbol: s?.symbol ?? "creditcard.fill",
                                 colorHex: s?.colorHex ?? 0x5E6AD2)
@@ -122,6 +125,23 @@ final class SubscriptionStore {
         SoundManager.success(enabled: soundsEnabled)
     }
 
+    /// Zapisuje zmiany w istniejącej subskrypcji (rozpoznawanej po `id`).
+    func update(_ sub: Subscription) {
+        guard let i = subscriptions.firstIndex(where: { $0.id == sub.id }) else { return }
+        var sub = sub
+        // Edycja może przesunąć datę dezaktywacji, ale nie zmienia stanu: aktywna zostaje aktywna, nieaktywna – nieaktywna.
+        sub.deactivatedAt = subscriptions[i].deactivatedAt.map { sub.deactivatedAt ?? $0 }
+        // Bez zmian – nie ma czego wysyłać na serwer.
+        if subscriptions[i] != sub { subscriptions[i] = sub }
+        SoundManager.success(enabled: soundsEnabled)
+    }
+
+    /// Dezaktywuje subskrypcję (nieodwracalnie): płatności od tej chwili znikają, wcześniejsze zostają.
+    func deactivate(_ sub: Subscription) {
+        guard let i = subscriptions.firstIndex(where: { $0.id == sub.id }), subscriptions[i].isActive else { return }
+        subscriptions[i].deactivatedAt = .now
+    }
+
     func delete(_ sub: Subscription) {
         subscriptions.removeAll { $0.id == sub.id }
     }
@@ -135,8 +155,17 @@ final class SubscriptionStore {
 
     // MARK: - Obliczenia
 
-    var monthlyTotal: Double { subscriptions.reduce(0) { $0 + $1.monthlyCost } }
-    var yearlyTotal: Double { subscriptions.reduce(0) { $0 + $1.yearlyCost } }
+    var activeSubscriptions: [Subscription] { subscriptions.filter(\.isActive) }
+
+    /// Nieaktywne, od ostatnio dezaktywowanej.
+    var inactiveSubscriptions: [Subscription] {
+        subscriptions
+            .filter { !$0.isActive }
+            .sorted { ($0.deactivatedAt ?? .distantPast) > ($1.deactivatedAt ?? .distantPast) }
+    }
+
+    var monthlyTotal: Double { activeSubscriptions.reduce(0) { $0 + $1.monthlyCost } }
+    var yearlyTotal: Double { activeSubscriptions.reduce(0) { $0 + $1.yearlyCost } }
 
     /// Subskrypcje posortowane po dacie najbliższej płatności.
     var upcoming: [(sub: Subscription, date: Date)] {
@@ -169,8 +198,10 @@ final class SubscriptionStore {
 
     // MARK: - Formatowanie
 
-    nonisolated static func format(_ v: Double, currency: String) -> String {
-        let whole = abs(v.truncatingRemainder(dividingBy: 1)) < 0.005
+    /// - Parameter reference: kwota, według której dobierana jest liczba miejsc po przecinku
+    ///   (domyślnie `v`) – np. końcowa wartość licznika, żeby format nie zmieniał się w trakcie animacji.
+    nonisolated static func format(_ v: Double, currency: String, like reference: Double? = nil) -> String {
+        let whole = abs((reference ?? v).truncatingRemainder(dividingBy: 1)) < 0.005
         return v.formatted(
             .currency(code: currency)
                 .locale(AppCal.locale)

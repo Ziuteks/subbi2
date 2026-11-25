@@ -8,7 +8,7 @@ struct SettingsView: View {
     private let currencies = ["PLN", "EUR", "USD", "GBP"]
 
     /// Dostępne opcje przypomnienia (w godzinach przed płatnością).
-    private let baseReminderOptions = [0, 1, 3, 6, 12, 24, 48, 72, 168]
+    private let baseReminderOptions = [1, 3, 6, 12, 24, 48, 72, 168]
 
     /// Opcje + bieżąca wartość, gdyby nie było jej na liście
     /// (np. po migracji starego ustawienia z dni), żeby Picker zawsze miał zaznaczenie.
@@ -26,7 +26,6 @@ struct SettingsView: View {
 
     /// Etykieta opcji z odmianą liczebnika („3 godziny przed”, „2 dni przed” / „3 hours before”).
     private func reminderLabel(_ h: Int) -> String {
-        if h == 0 { return String(localized: "W dniu płatności", bundle: .appLanguage) }
         let amount = h % 24 == 0 ? Plural.days(h / 24) : Plural.hours(h)
         return String(localized: "\(amount) przed", bundle: .appLanguage)
     }
@@ -90,28 +89,76 @@ struct SettingsView: View {
                     Button(role: .destructive) {
                         showLogoutDialog = true
                     } label: {
-                        Text("Wyloguj się").frame(maxWidth: .infinity)
+                        Text("Wyloguj się")
+                            .font(.headline)
+                            .foregroundStyle(.black)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                            .contentShape(Rectangle())
                     }
+                    // Przyciemnienie jak w „Dodaj subskrypcję”; przycisk zostaje przyciemniony, dopóki okienko jest otwarte.
+                    .buttonStyle(DimmingButtonStyle(isHeld: showLogoutDialog))
                     // Okienko podpięte do samego przycisku, żeby wyświetlało się przy nim (a nie u góry ekranu).
-                    .confirmationDialog("Czy na pewno chcesz się wylogować?",
-                                        isPresented: $showLogoutDialog, titleVisibility: .visible) {
-                        Button("Wyloguj się", role: .destructive) {
-                            Task { await auth.logout() }
-                        }
-                        Button("Anuluj", role: .cancel) {}
-                    } message: {
-                        Text("Subskrypcje zostaną usunięte z tego urządzenia – pozostaną na Twoim koncie.")
+                    // Własny popover, bo systemowy confirmationDialog nie pozwala pewnie ustawić koloru przycisków.
+                    .popover(isPresented: $showLogoutDialog) {
+                        logoutConfirmation
+                            .presentationCompactAdaptation(.popover)
+                            .presentationBackground(Theme.card)
                     }
+                    // Bez marginesów wiersza, żeby przycisk miał szerokość i wysokość zwykłej rubryki.
+                    .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10).stroke(Theme.alert, lineWidth: 1)
-                    )
                 }
             }
             .scrollContentBackground(.hidden)
             .screenBackground()
             .navigationTitle("Ustawienia")
         }
+    }
+
+    /// Okno potwierdzenia wylogowania (dotknięcie poza nim działa jak „Anuluj").
+    private var logoutConfirmation: some View {
+        VStack(spacing: 12) {
+            Text("Czy na pewno chcesz się wylogować?")
+                .font(.headline)
+                .foregroundStyle(.white)
+            Text("Subskrypcje zostaną usunięte z tego urządzenia – pozostaną na Twoim koncie.")
+                .font(.footnote)
+                .foregroundStyle(Theme.muted)
+
+            Button {
+                showLogoutDialog = false
+                Task { await auth.logout() }
+            } label: {
+                Text("Wyloguj się")
+                    .font(.headline)
+                    .foregroundStyle(.black)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Theme.accent, in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+
+            Button {
+                showLogoutDialog = false
+            } label: {
+                Text("Anuluj")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(.white.opacity(0.12), in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(20)
+        .frame(width: 300)
     }
 
     /// Stan synchronizacji z serwerem; dotknięcie wymusza synchronizację.

@@ -27,6 +27,19 @@ struct CardStyle: ViewModifier {
     }
 }
 
+/// Przyciemnia przycisk po naciśnięciu; `isHeld` zostawia go przyciemnionego
+/// (np. dopóki otwarte jest okienko, które wywołał).
+struct DimmingButtonStyle: ButtonStyle {
+    var isHeld = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let dimmed = configuration.isPressed || isHeld
+        configuration.label
+            .opacity(dimmed ? 0.6 : 1)
+            .animation(.easeOut(duration: 0.15), value: dimmed)
+    }
+}
+
 extension View {
     func cardStyle() -> some View { modifier(CardStyle()) }
 

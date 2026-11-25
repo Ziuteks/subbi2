@@ -72,6 +72,8 @@ final class AuthStore {
     func register(name: String, email: String, password: String) async throws {
         let session = try await APIClient(baseURL: serverURL).register(name: name, email: email, password: password)
         try await start(session)
+        // Nowe konto zaczyna z językiem systemu (później można go zmienić w ustawieniach).
+        store.language = .system
     }
 
     private func start(_ session: AuthSession) async throws {

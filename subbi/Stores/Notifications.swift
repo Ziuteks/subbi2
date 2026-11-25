@@ -4,7 +4,8 @@ import AudioToolbox
 import UIKit
 
 enum NotificationManager {
-    /// Godzina, o której "przypada" płatność (punkt odniesienia dla odliczania).
+    /// Domyślna godzina płatności w formularzu i danych przykładowych.
+    /// Przypomnienia liczone są od faktycznej godziny płatności zapisanej w subskrypcji.
     static let dueHour = 9
 
     static func requestAuthorization() {
@@ -14,7 +15,7 @@ enum NotificationManager {
 
     /// Planuje przypomnienia o najbliższych płatnościach.
     /// - Parameter hoursBefore: ile godzin przed płatnością ma przyjść powiadomienie
-    ///   (0 = w momencie płatności, 24 = dzień wcześniej o tej samej porze itd.).
+    ///   (24 = dokładnie 24 godziny wcześniej itd.).
     static func reschedule(_ subs: [Subscription],
                            enabled: Bool,
                            hoursBefore: Int,
@@ -23,21 +24,25 @@ enum NotificationManager {
         center.removeAllPendingNotificationRequests()
         guard enabled else { return }
 
-        let hours = max(0, hoursBefore)
+        let hours = max(1, hoursBefore)
         let cal = AppCal.cal
         let start = cal.startOfDay(for: .now)
         guard let end = cal.date(byAdding: .day, value: 120, to: start) else { return }
+
+        // Moment powiadomienia zapisany w UTC, żeby zmiana czasu ani strefy go nie przesunęła.
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = .gmt
 
         let when = whenText(hoursBefore: hours)
 
         for sub in subs {
             for date in sub.occurrences(from: start, to: end).prefix(3) {
-                // Moment płatności = dzień płatności o godzinie dueHour
-                guard let due = cal.date(bySettingHour: dueHour, minute: 0, second: 0, of: date),
-                      let fire = cal.date(byAdding: .hour, value: -hours, to: due),
-                      fire > .now else { continue }
+                // `date` zawiera godzinę płatności – odejmujemy od niej dokładnie tyle godzin, ile ustawiono.
+                let fire = date.addingTimeInterval(-Double(hours) * 3600)
+                guard fire > .now else { continue }
 
-                let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+                let comps = utc.dateComponents([.calendar, .timeZone, .year, .month, .day, .hour, .minute, .second],
+                                               from: fire)
 
                 let content = UNMutableNotificationContent()
                 content.title = String(localized: "Zbliża się płatność", bundle: .appLanguage)
@@ -55,7 +60,6 @@ enum NotificationManager {
 
     private static func whenText(hoursBefore h: Int) -> String {
         switch h {
-        case 0:  return String(localized: "dziś", bundle: .appLanguage)
         case 24: return String(localized: "jutro", bundle: .appLanguage)
         default:
             // „za 3 dni” / „in 3 days”, „za 2 godziny” / „in 2 hours” (odmiana w Plural)

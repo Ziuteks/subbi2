@@ -1,7 +1,9 @@
 import SwiftUI
 
+/// Formularz subskrypcji: dodawanie nowej albo – gdy podano `editing` – edycja istniejącej.
 struct AddSubscriptionView: View {
     var store: SubscriptionStore
+    private let editing: Subscription?
     @Environment(\.dismiss) private var dismiss
 
     @State private var search = ""
@@ -14,6 +16,26 @@ struct AddSubscriptionView: View {
     /// Godzina płatności (liczy się tylko godzina i minuta, data jest pomijana).
     @State private var paymentTime = AppCal.cal.date(bySettingHour: NotificationManager.dueHour,
                                                      minute: 0, second: 0, of: .now) ?? .now
+    /// Moment dezaktywacji – używany tylko przy edycji nieaktywnej subskrypcji.
+    @State private var deactivatedAt = Date.now
+    @State private var showDeleteDialog = false
+
+    init(store: SubscriptionStore, editing: Subscription? = nil) {
+        self.store = store
+        self.editing = editing
+        guard let editing else { return }
+        _name = State(initialValue: editing.name)
+        _priceText = State(initialValue: Self.priceText(editing.price))
+        _period = State(initialValue: editing.period)
+        _category = State(initialValue: editing.category)
+        _firstPayment = State(initialValue: editing.firstPayment)
+        _paymentTime = State(initialValue: editing.firstPayment)
+        _deactivatedAt = State(initialValue: editing.deactivatedAt ?? .now)
+    }
+
+    private var isInactive: Bool { editing?.isActive == false }
+
+    private var screenTitle: LocalizedStringKey { editing == nil ? "Dodaj subskrypcję" : "Edytuj subskrypcję" }
 
     private var parsedPrice: Double? {
         Double(priceText.replacingOccurrences(of: ",", with: "."))
@@ -38,15 +60,18 @@ struct AddSubscriptionView: View {
     }
 
     private var draft: Subscription {
-        let match = (selected?.name == name) ? selected : nil
+        // Przy edycji ikona podąża za nazwą z katalogu, a dla innych nazw zostaje dotychczasowa.
+        let match = editing == nil ? (selected?.name == name ? selected : nil) : Service.matching(name)
         return Subscription(
+            id: editing?.id ?? UUID(),
             name: name.trimmingCharacters(in: .whitespaces),
             price: parsedPrice ?? 0,
             period: period,
             firstPayment: firstPaymentDateTime,
             category: category,
-            symbol: match?.symbol ?? "creditcard.fill",
-            colorHex: match?.colorHex ?? 0x5E6AD2
+            symbol: match?.symbol ?? editing?.symbol ?? "creditcard.fill",
+            colorHex: match?.colorHex ?? editing?.colorHex ?? 0x5E6AD2,
+            deactivatedAt: isInactive ? min(deactivatedAt, .now) : nil // nigdy w przyszłości
         )
     }
 
@@ -54,15 +79,21 @@ struct AddSubscriptionView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    searchField
-                    Text("POPULARNE SERWISY")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(Theme.muted)
-                    servicesRow
+                    if editing == nil {
+                        searchField
+                        Text("POPULARNE SERWISY")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Theme.muted)
+                        servicesRow
+                    } else {
+                        ServiceIcon(symbol: draft.iconSymbol, color: draft.color, size: 72)
+                            .frame(maxWidth: .infinity)
+                    }
                     formCard
                     infoText
                     Button(action: save) {
-                        Label("Dodaj", systemImage: "plus")
+                        Label(editing == nil ? "Dodaj" : "Zapisz",
+                              systemImage: editing == nil ? "plus" : "checkmark")
                             .font(.headline)
                             .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
@@ -71,11 +102,12 @@ struct AddSubscriptionView: View {
                                         in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
                     .disabled(!canSave)
+                    if let editing { deleteButton(editing) }
                 }
                 .padding(16)
             }
             .screenBackground()
-            .navigationTitle("Dodaj subskrypcję")
+            .navigationTitle(screenTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -200,9 +232,34 @@ struct AddSubscriptionView: View {
                     .environment(\.locale, AppCal.locale)
             }
             .padding(.vertical, 8)
+
+            if isInactive { deactivationRows }
         }
         .padding(.horizontal, 16)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var deactivationRows: some View {
+        Divider().overlay(Color.white.opacity(0.1))
+        HStack {
+            Text("Data dezaktywacji")
+            Spacer()
+            DatePicker("Data dezaktywacji", selection: $deactivatedAt, in: ...Date.now, displayedComponents: .date)
+                .labelsHidden()
+                .environment(\.locale, AppCal.locale)
+        }
+        .padding(.vertical, 8)
+        Divider().overlay(Color.white.opacity(0.1))
+        HStack {
+            Text("Godzina dezaktywacji")
+            Spacer()
+            DatePicker("Godzina dezaktywacji", selection: $deactivatedAt, in: ...Date.now,
+                       displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .environment(\.locale, AppCal.locale)
+        }
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
@@ -215,19 +272,47 @@ struct AddSubscriptionView: View {
         }
     }
 
+    private func deleteButton(_ sub: Subscription) -> some View {
+        Button {
+            showDeleteDialog = true
+        } label: {
+            Label("Usuń subskrypcję", systemImage: "trash")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Theme.alert, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(DimmingButtonStyle(isHeld: showDeleteDialog))
+        .confirmationDialog("Czy na pewno chcesz usunąć tę subskrypcję?",
+                            isPresented: $showDeleteDialog, titleVisibility: .visible) {
+            Button("Usuń", role: .destructive) {
+                store.delete(sub)
+                dismiss()
+            }
+            Button("Anuluj", role: .cancel) {}
+        } message: {
+            Text("Tej operacji nie można cofnąć.")
+        }
+    }
+
+    /// Cena do pola tekstowego, z separatorem jak w wybranym języku (parsedPrice przyjmuje oba).
+    private static func priceText(_ value: Double) -> String {
+        let price = String(format: "%.2f", value)
+        return AppLanguage.current == .pl ? price.replacingOccurrences(of: ".", with: ",") : price
+    }
+
     private func choose(_ service: Service) {
         selected = service
         name = service.name
         category = service.category
-        let price = String(format: "%.2f", service.price)
-        // Separator dziesiętny jak w wybranym języku (parsedPrice przyjmuje oba).
-        priceText = AppLanguage.current == .pl ? price.replacingOccurrences(of: ".", with: ",") : price
+        priceText = Self.priceText(service.price)
         SoundManager.tap(enabled: store.soundsEnabled)
     }
 
     private func save() {
         guard canSave else { return }
-        store.add(draft)
+        if editing == nil { store.add(draft) } else { store.update(draft) }
         dismiss()
     }
 }

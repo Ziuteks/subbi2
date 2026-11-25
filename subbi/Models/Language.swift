@@ -31,11 +31,24 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
         current = language
     }
 
-    /// Zapisane ustawienie (z migracją dawnych wartości „Polski” / „English”).
+    /// Język systemu: pierwszy obsługiwany z listy preferowanych języków użytkownika.
+    /// Gdy żaden nie jest obsługiwany – angielski.
+    static var system: AppLanguage { preferred(from: Locale.preferredLanguages) }
+
+    static func preferred(from identifiers: [String]) -> AppLanguage {
+        identifiers.lazy
+            .compactMap { Locale(identifier: $0).language.languageCode?.identifier }
+            .compactMap(AppLanguage.init(rawValue:))
+            .first ?? .en
+    }
+
+    /// Zapisane ustawienie (z migracją dawnych wartości „Polski” / „English”),
+    /// a jeśli go nie ma – język systemu.
     static func saved(in defaults: UserDefaults = .standard) -> AppLanguage {
         switch defaults.string(forKey: "language") {
         case "en", "English": return .en
-        default: return .pl
+        case "pl", "Polski": return .pl
+        default: return .system
         }
     }
 
