@@ -221,6 +221,18 @@
         }
       }
     },
+    "Cena subskrypcji może wynosić najwyżej 10 000." : {
+      "comment" : "Komunikat z subbi-backend",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The subscription price can be at most 10,000."
+          }
+        }
+      }
+    },
     "Czy na pewno chcesz się wylogować?" : {
       "localizations" : {
         "en" : {
@@ -625,6 +637,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sign in"
+          }
+        }
+      }
+    },
+    "Maksymalna cena subskrypcji to %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The maximum subscription price is %@."
           }
         }
       }

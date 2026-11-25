@@ -45,6 +45,9 @@ enum SubCategory: String, Codable, CaseIterable, Identifiable {
 }
 
 struct Subscription: Identifiable, Codable, Hashable {
+    /// Najwyższa dozwolona cena – ten sam limit sprawdza subbi-backend (`MAX_PRICE`).
+    static let maxPrice = 10_000.0
+
     var id = UUID()
     var name: String
     var price: Double

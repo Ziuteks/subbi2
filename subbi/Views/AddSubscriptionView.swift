@@ -41,8 +41,10 @@ struct AddSubscriptionView: View {
         Double(priceText.replacingOccurrences(of: ",", with: "."))
     }
 
+    private var priceTooHigh: Bool { (parsedPrice ?? 0) > Subscription.maxPrice }
+
     private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty && (parsedPrice ?? 0) > 0
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && (parsedPrice ?? 0) > 0 && !priceTooHigh
     }
 
     private var filtered: [Service] {
@@ -176,10 +178,18 @@ struct AddSubscriptionView: View {
                 TextField("0,00", text: $priceText)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
-                    .foregroundStyle(Theme.muted)
+                    .foregroundStyle(priceTooHigh ? Theme.alert : Theme.muted)
                 Text(store.currency).font(.caption).foregroundStyle(Theme.muted)
             }
             .padding(.vertical, 12)
+            // Komunikat tuż pod ceną, żeby był widoczny bez przewijania formularza.
+            if priceTooHigh {
+                Text("Maksymalna cena subskrypcji to \(store.money(Subscription.maxPrice)).")
+                    .font(.caption)
+                    .foregroundStyle(Theme.alert)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 12)
+            }
             Divider().overlay(Color.white.opacity(0.1))
 
             HStack {
